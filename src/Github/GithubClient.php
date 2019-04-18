@@ -27,10 +27,11 @@ class GithubClient {
     }
 
     /**
-     * Check repo exist on acc, repoId if exist, false if not found
+     * Check repo exist on acc, repoId if exist, false if not found. If passed $commitHistory as true, array will returned
      * @param string $repoName
      * @param bool $commitHistory need select commit history
      * @param integer $historyLength how mush last commits select
+     * @throws RuntimeException if something wrong with api with http codes
      * @return bool|string|array
      */
     public function searchRepo (string $repoName, bool $commitHistory = false, int $historyLength = 5) {
@@ -62,12 +63,46 @@ class GithubClient {
 
     }
 
-    public function cloneRepo ($path) {
+    /**
+     * Clone git repo via cmd
+     * @param string $path path 2 dir with where should clone repo
+     * @param string $repoName
+     * @param bool $overwrite if true will remove dir and re-clone repo
+     * @throws RuntimeException if git repo already exist
+     * @return bool
+     */
+    public function cloneRepo (string $path, string $repoName, bool $overwrite = false) {
+        if (!is_dir($path)) {
+            mkdir($path);
+        } else {
+            if (is_dir($path . $repoName)) {
+                if (!$overwrite) {
+                    throw new RuntimeException('Repo already exist', 409);
+                } else {
+                    system("rm -rf ".escapeshellarg($path . $repoName));
+                }
+            }
+        }
 
+        $cmd = 'cd ' . $path . '&& git clone https://' . $this->token . ':x-oauth-basic@github.com/' . $this->userName .
+            '/' . $repoName . '.git';
+
+        $this->getCommandOutput($cmd);
+        return is_dir($path . $repoName . '/.git');
     }
 
     public function commitRepo () {
 
+    }
+
+    private function getCommandOutput ($cmd) {
+        $output = [];
+        $exitCode = NULL;
+        exec("$cmd", $output, $exitCode);
+        if($exitCode !== 0 || !is_array($output))  {
+            throw new RuntimeException("Command $cmd failed.", 400);
+        }
+        return $output;
     }
 
     private function gitRequest (array $query) {
