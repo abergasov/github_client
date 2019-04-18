@@ -84,15 +84,32 @@ class GithubClient {
             }
         }
 
-        $cmd = 'cd ' . $path . '&& git clone https://' . $this->token . ':x-oauth-basic@github.com/' . $this->userName .
+        $cmd = 'cd ' . $path . ' && git clone https://' . $this->token . ':x-oauth-basic@github.com/' . $this->userName .
             '/' . $repoName . '.git';
 
         $this->getCommandOutput($cmd);
         return is_dir($path . $repoName . '/.git');
     }
 
-    public function commitRepo () {
-
+    /**
+     * Commit in repo
+     * @param $repoPath
+     * @param $commitMessage
+     * @throws RuntimeException is some troubles in commit
+     * @return bool true if commit ok
+     */
+    public function commitRepo ($repoPath, $commitMessage) : bool {
+        if (!is_dir($repoPath)) {
+            throw new RuntimeException('Repository not found', 404);
+        }
+        $cmd = 'cd ' . $repoPath . ' && git add . && git commit -m "' .$commitMessage . '" && git push origin master';
+        $output = $this->getCommandOutput($cmd);
+        $output = implode('', $output);
+        if (preg_match('/fatal/i', $output) === 1) {
+            throw new RuntimeException('Error in repo commit');
+        } else {
+            return true;
+        }
     }
 
     private function getCommandOutput ($cmd) {
