@@ -59,8 +59,51 @@ class GithubClient {
         }
     }
 
-    public function createRepo () {
+    /**
+     * Create repo.
+     * @param string $name
+     * @param bool $private
+     * @param string $description
+     * @param bool $hasIssues
+     * @param bool $hasProjects
+     * @param bool $hasWiki
+     * @throws RuntimeException if something wrong with api with http codes
+     * @return bool true if successfully created
+     */
+    public function createRepo (string $name, bool $private = true, string $description = '',  bool $hasIssues = false, bool $hasProjects = false, bool $hasWiki = false) : bool {
+        $query = [
+            'name' => $name,
+            'description' => $description,
+            'homepage' => 'https://github.com',
+            'private' => $private,
+            'has_issues' => $hasIssues,
+            'has_projects' => $hasProjects,
+            'has_wiki' => $hasWiki
+        ];
+        $res = $this->gitRequest($query, 'https://api.github.com/user/repos');
+        return isset($res['id']) && $res['id'] > 0;
+    }
 
+    /**
+     * Remove repo from disc
+     * @param $path
+     */
+    public function removeRepoFromDisc ($path) {
+        system("rm -rf ".escapeshellarg($path));
+    }
+
+    /**
+     * Remove repo from git acc
+     * @param string $repoName
+     * @return bool true if removed
+     */
+    public function deleteRepoFromGitAcc (string $repoName) : bool {
+        $res = $this->gitRequest(
+            [],
+            'https://api.github.com/repos/' . $this->userName . '/' . $repoName,
+            'DELETE'
+        );
+        return $res === 204;
     }
 
     /**
@@ -71,7 +114,7 @@ class GithubClient {
      * @throws RuntimeException if git repo already exist
      * @return bool
      */
-    public function cloneRepo (string $path, string $repoName, bool $overwrite = false) {
+    public function cloneRepo (string $path, string $repoName, bool $overwrite = false) : bool {
         if (!is_dir($path)) {
             mkdir($path);
         } else {
@@ -79,7 +122,7 @@ class GithubClient {
                 if (!$overwrite) {
                     throw new RuntimeException('Repo already exist', 409);
                 } else {
-                    system("rm -rf ".escapeshellarg($path . $repoName));
+                    $this->removeRepoFromDisc($path . $repoName);
                 }
             }
         }
@@ -122,11 +165,13 @@ class GithubClient {
         return $output;
     }
 
-    private function gitRequest (array $query) {
+    private function gitRequest (array $query, string $url = null, string $method = 'POST') {
 
-        $ch = curl_init(self::APIURL);
+        $ch = curl_init($url ? $url : self::APIURL);
 
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($query));
+        if (count($query) > 0) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($query));
+        }
         curl_setopt($ch, CURLOPT_SSLVERSION, 6);
         curl_setopt($ch, CURLOPT_HEADER, true);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -136,7 +181,7 @@ class GithubClient {
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 120);
         curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Authorization: bearer ' . $this->token,
             'User-Agent: ' . $this->userName,
@@ -154,10 +199,11 @@ class GithubClient {
         list($messageHeaders, $messageBody) = preg_split("/\r\n\r\n|\n\n|\r\r/", $response, 2);
         $this->lastResponseHeaders = $this->curlParseHeaders($messageHeaders);
 
-        if ($this->lastResponseHeaders['http_status_code'] !== '200') {
+        $responseCode = (int) $this->lastResponseHeaders['http_status_code'];
+        if ($responseCode < 200 || $responseCode > 299) {
             throw new RuntimeException($messageBody, $this->lastResponseHeaders['http_status_code']);
         }
-        return json_decode($messageBody, true);
+        return $messageBody !== '' ? json_decode($messageBody, true) : $responseCode;
     }
 
     private function curlParseHeaders($message_headers) {
