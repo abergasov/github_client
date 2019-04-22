@@ -135,6 +135,48 @@ class GithubClient {
     }
 
     /**
+     * Get parsered git log data
+     * @param string $path path 2 repo
+     * @param int $deep
+     * @throws RuntimeException if git repo already exist or error while log acess
+     * @return array
+     */
+    public function getCommitHistoryFromLocalGit (string $path, int $deep = 20) : array {
+        if (!is_dir($path)) {
+            throw new \RuntimeException('Local repository not found at ' . $path, 404);
+        }
+        $cmd = 'cd ' . $path . ' && git log --pretty=format:"%h | %ar | %s" -' . $deep;
+        $output = $this->getCommandOutput($cmd);
+        if (is_array($output)) {
+            $result = [];
+            foreach ($output as $row) {
+                $tmp = explode(' | ', $row);
+                $result[$tmp[0]] = [
+                    'date' => $tmp[1], 'comment' => $tmp[2]
+                ];
+            }
+            return $result;
+        } else {
+            throw new \RuntimeException('Error get git log, command: ' . $cmd, 500);
+        }
+    }
+
+    /**
+     * Get files changed in revision
+     * @param string $path
+     * @param string $commitHash
+     * @return array
+     */
+    public function getCommitChanges (string $path, string $commitHash) : array {
+        if (!is_dir($path)) {
+            throw new RuntimeException('Repository not found', 404);
+        }
+        $cmd = 'cd ' . $path . ' && git diff-tree --no-commit-id --name-only -r 111' . $commitHash;
+        $output = $this->getCommandOutput($cmd);
+        return $output;
+    }
+
+    /**
      * Commit in repo
      * @param $repoPath
      * @param $commitMessage
