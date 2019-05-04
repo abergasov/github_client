@@ -180,20 +180,34 @@ class GithubClient {
      * Commit in repo
      * @param $repoPath
      * @param $commitMessage
-     * @throws RuntimeException is some troubles in commit
-     * @return bool true if commit ok
+     * @throws GithubException is some troubles in commit
+     * @return string|null commit hash if ok, null if nothing to commit, working tree clean
      */
-    public function commitRepo ($repoPath, $commitMessage) : bool {
+    public function commitRepo ($repoPath, $commitMessage) : ?string {
         if (!is_dir($repoPath)) {
             throw new RuntimeException('Repository not found', 404);
         }
         $cmd = 'cd ' . $repoPath . ' && git add . && git commit -m "' .$commitMessage . '" && git push origin master';
-        $output = $this->getCommandOutput($cmd);
-        $output = implode('', $output);
-        if (preg_match('/fatal/i', $output) === 1) {
-            throw new RuntimeException('Error in repo commit');
-        } else {
-            return true;
+        try {
+            $output = $this->getCommandOutput($cmd);
+            $output = implode('', $output);
+            if (preg_match('/fatal/i', $output) === 1) {
+                throw new GithubException($output, 'Error in repo commit');
+            } else {
+                preg_match('/\[master\s(.+?)\]/m', $output, $matches);
+                if (is_array($matches) && count($matches) === 2) {
+                    return $matches[1];
+                } else {
+                    throw new GithubException($output, 'Error in repo commit');
+                }
+            }
+        } catch (GithubException $ge) {
+            $output = $ge->getCmdOutput();
+            if (is_array($output) && in_array('nothing to commit, working tree clean', $output)) {
+                return null;
+            } else {
+                throw new GithubException($output, 'Error in repo commit');
+            }
         }
     }
 
@@ -202,7 +216,7 @@ class GithubClient {
         $exitCode = NULL;
         exec("$cmd", $output, $exitCode);
         if($exitCode !== 0 || !is_array($output))  {
-            throw new RuntimeException("Command $cmd failed.", 400);
+            throw new GithubException($output, "Command $cmd failed.", 400);
         }
         return $output;
     }
