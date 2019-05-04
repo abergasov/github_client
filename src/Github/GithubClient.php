@@ -165,6 +165,7 @@ class GithubClient {
      * Get files changed in revision
      * @param string $path
      * @param string $commitHash
+     * @throws GithubException
      * @return array
      */
     public function getCommitChanges (string $path, string $commitHash) : array {
@@ -174,6 +175,16 @@ class GithubClient {
         $cmd = 'cd ' . $path . ' && git diff-tree --no-commit-id --name-only -r 111' . $commitHash;
         $output = $this->getCommandOutput($cmd);
         return $output;
+    }
+
+    /**
+     * @param string $repoName
+     * @param string $commitHash
+     * @return int|mixed
+     */
+    public function getApiCommitInfo (string $repoName, string $commitHash) {
+        $url = 'https://api.github.com/repos/' . $this->userName . '/' . $repoName . '/commits/' . $commitHash;
+        return $this->gitRequest([], $url, 'GET');
     }
 
     /**
