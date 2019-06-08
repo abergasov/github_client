@@ -111,6 +111,7 @@ class GithubClient {
      * @param string $path path 2 dir with where should clone repo
      * @param string $repoName
      * @param bool $overwrite if true will remove dir and re-clone repo
+     * @throws GithubException
      * @throws RuntimeException if git repo already exist
      * @return bool
      */
@@ -138,6 +139,7 @@ class GithubClient {
      * Get parsered git log data
      * @param string $path path 2 repo
      * @param int $deep
+     * @throws GithubException
      * @throws RuntimeException if git repo already exist or error while log acess
      * @return array
      */
@@ -191,14 +193,18 @@ class GithubClient {
      * Commit in repo
      * @param $repoPath
      * @param $commitMessage
+     * @param string $commitFolder specify folder in repo to commit
      * @throws GithubException is some troubles in commit
      * @return string|null commit hash if ok, null if nothing to commit, working tree clean
      */
-    public function commitRepo ($repoPath, $commitMessage) : ?string {
+    public function commitRepo ($repoPath, $commitMessage, string $commitFolder = null) : ?string {
         if (!is_dir($repoPath)) {
             throw new RuntimeException('Repository not found', 404);
         }
-        $cmd = 'cd ' . $repoPath . ' && git add . && git commit -m "' .$commitMessage . '" && git push origin master';
+        $gitAdd = $commitFolder === null ?
+            'git add .' : 'git add ' . substr($commitFolder, -1) !== '/' ? $commitFolder . '/'  : $commitFolder;
+
+        $cmd = 'cd ' . $repoPath . ' && ' . $gitAdd .' && git commit -m "' .$commitMessage . '" && git push origin master';
         try {
             $output = $this->getCommandOutput($cmd);
             $output = implode('', $output);
@@ -222,6 +228,11 @@ class GithubClient {
         }
     }
 
+    /**
+     * @param $cmd
+     * @return array
+     * @throws GithubException
+     */
     private function getCommandOutput ($cmd) {
         $output = [];
         $exitCode = NULL;
